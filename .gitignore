@@ -1,0 +1,35 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Python (in case a venv ends up outside backend/) ---
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# --- Node (in case node_modules ends up outside frontend/) ---
+node_modules/
+.next/
+
+# --- Secrets \u2014 never commit real keys ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Uploaded/generated runtime data ---
+backend/storage/*
+!backend/storage/.gitkeep
+
+# --- Logs ---
+*.log
+npm-debug.log*

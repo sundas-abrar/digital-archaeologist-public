@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --font-display: "Inter Tight", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background-color: #0A0A0B;
+  background-image:
+    radial-gradient(ellipse at top, rgba(192, 138, 78, 0.05), transparent 55%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(243, 239, 230, 0.012) 0px,
+      rgba(243, 239, 230, 0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  color: #DCD7CB;
+}
+
+::selection {
+  background: rgba(192, 138, 78, 0.3);
+  color: #F3EFE6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
