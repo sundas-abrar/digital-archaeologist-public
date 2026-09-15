@@ -1,35 +1,35 @@
 # Digital Archaeologist — Backend (Phase 1: Skeleton)
 
-## Ye kya karta hai
-FastAPI server jo `GET /api/health` route deta hai. Frontend (Next.js)
-har 8 seconds mein isko ping karta hai `/status` page pe.
+## What this does
+A FastAPI server that provides the `GET /api/health` route. The
+frontend (Next.js) pings it every 8 seconds from the `/status` page.
 
-## Setup (local machine pe)
+## Setup (local machine)
 
 ```bash
 cd backend
 python -m venv venv
 ```
 
-Windows pe activate karo:
+Activate it on Windows:
 ```bash
 venv\Scripts\activate
 ```
-Mac/Linux pe:
+On Mac/Linux:
 ```bash
 source venv/bin/activate
 ```
 
-Phir:
+Then:
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Test karo
-Browser mein kholo: http://localhost:8000/api/health
+## Testing it
+Open in your browser: http://localhost:8000/api/health
 
-Response milna chahiye:
+You should get this response:
 ```json
 {"status": "ok", "service": "digital-archaeologist-backend", "timestamp": "..."}
 ```
@@ -49,11 +49,11 @@ cp .env.example .env
 Without a key, the endpoint still responds (200) with
 `"available": false` and an explanation, so the UI degrades gracefully.
 
-## Frontend se connect
-Frontend ka `.env.local` already `http://localhost:8000` pe point karta
-hai — dono (frontend `npm run dev` + backend `uvicorn`) ek sath chalao,
-phir `/status` page pe "Signal confirmed" dikhna chahiye.
+## Connecting to the frontend
+The frontend's `.env.local` already points to `http://localhost:8000` —
+run both (frontend `npm run dev` + backend `uvicorn`) at the same time,
+and the `/status` page should then show "Signal confirmed".
 
 ## Next step
-Phase 2: ZIP upload endpoint jo repo safely extract kare aur file tree
-return kare.
+Phase 2: a ZIP upload endpoint that safely extracts the repo and
+returns the file tree.

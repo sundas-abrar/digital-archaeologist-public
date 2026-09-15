@@ -7,7 +7,7 @@
 - `/about` — concept explanation
 - `/status` — live backend connectivity check, pings FastAPI's `/api/health` every 8s ("No signal" is expected until the backend exists)
 
-## Setup (local machine pe)
+## Setup (local machine)
 
 ```bash
 cd frontend
@@ -16,11 +16,11 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-Browser mein kholo: http://localhost:3000
+Open in your browser: http://localhost:3000
 
-## Backend URL badalna ho to
-`.env.local` mein `NEXT_PUBLIC_API_URL` change karo.
+## Changing the backend URL
+Change `NEXT_PUBLIC_API_URL` in `.env.local`.
 
 ## Next step
-Phase 1 ka doosra half: FastAPI backend banao jo `GET /api/health` par
-`{"status": "ok"}` return kare, port 8000 par chale.
+The other half of Phase 1: build a FastAPI backend that returns
+`{"status": "ok"}` on `GET /api/health`, running on port 8000.
