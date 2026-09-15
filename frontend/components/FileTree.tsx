@@ -60,11 +60,11 @@ function TreeNode({
     const Icon = fileIcon(node.extension);
     return (
       <div
-        className="group flex items-center gap-2 px-2 py-1 transition-colors hover:bg-soil-800/60"
-        style={{ paddingLeft: depth * 18 + 8 }}
+        className="group flex min-w-0 items-center gap-2 px-2 py-1 transition-colors hover:bg-soil-800/60"
+        style={{ paddingLeft: `calc(${depth} * var(--tree-indent-step) + 8px)` }}
       >
         <Icon size={14} className="shrink-0 text-bone-600 group-hover:text-brass-400" />
-        <span className="truncate font-mono text-sm text-bone-300">
+        <span className="min-w-0 flex-1 truncate font-mono text-sm text-bone-300">
           {node.name}
         </span>
         {node.size_human && (
@@ -84,15 +84,15 @@ function TreeNode({
     <div>
       <button
         onClick={() => setManuallyOpened(!open)}
-        className="group flex w-full items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-soil-800/60"
-        style={{ paddingLeft: depth * 18 + 8 }}
+        className="group flex w-full min-w-0 items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-soil-800/60"
+        style={{ paddingLeft: `calc(${depth} * var(--tree-indent-step) + 8px)` }}
       >
         {open ? (
           <FolderOpen size={14} className="shrink-0 text-brass-400" />
         ) : (
           <Folder size={14} className="shrink-0 text-bone-500 group-hover:text-brass-400" />
         )}
-        <span className="truncate font-mono text-sm text-bone-200">
+        <span className="min-w-0 flex-1 truncate font-mono text-sm text-bone-200">
           {node.name}
         </span>
         {node.children && (
@@ -135,12 +135,12 @@ export default function FileTree({ root }: { root: FileTreeNode }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter files by name…"
-          className="w-full bg-transparent font-mono text-xs text-bone-300 placeholder:text-bone-700 focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent font-mono text-xs text-bone-300 placeholder:text-bone-700 focus:outline-none"
         />
         {search && (
           <button
             onClick={() => setSearch("")}
-            className="shrink-0 text-bone-600 transition-colors hover:text-rust-400"
+            className="-m-2 shrink-0 p-2 text-bone-600 transition-colors hover:text-rust-400 sm:-m-0 sm:p-0"
             aria-label="Clear filter"
           >
             <X size={13} />

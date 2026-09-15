@@ -221,7 +221,7 @@ export default function QAPanel({ sessionId }: { sessionId: string }) {
                 {runStatus === "running" ? "Running\u2026" : "Run"}
               </button>
               {activeCommand && (
-                <code className="truncate font-mono text-xs text-bone-600">
+                <code className="min-w-0 flex-1 truncate font-mono text-xs text-bone-600">
                   {activeCommand}
                 </code>
               )}

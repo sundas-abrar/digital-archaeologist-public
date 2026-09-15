@@ -205,7 +205,7 @@ export default function UploadPage() {
                       </div>
                       <button
                         onClick={() => removeFile(key)}
-                        className="shrink-0 text-bone-600 transition-colors hover:text-rust-400"
+                        className="-m-2 shrink-0 p-2 text-bone-600 transition-colors hover:text-rust-400 sm:-m-0 sm:p-0"
                         aria-label={`Remove ${f.name}`}
                       >
                         <X size={16} />
@@ -238,13 +238,13 @@ export default function UploadPage() {
 
       {result && (
         <div className="mt-10">
-          <div className="flex items-center justify-between border border-moss-400/40 bg-soil-900/50 px-4 py-3">
-            <p className="font-mono text-sm text-bone-100">
+          <div className="flex items-center justify-between gap-3 border border-moss-400/40 bg-soil-900/50 px-4 py-3">
+            <p className="min-w-0 flex-1 truncate font-mono text-sm text-bone-100">
               {result.filename} — extracted
             </p>
             <button
               onClick={reset}
-              className="font-mono text-xs uppercase tracking-[0.08em] text-bone-500 transition-colors hover:text-brass-400"
+              className="shrink-0 font-mono text-xs uppercase tracking-[0.08em] text-bone-500 transition-colors hover:text-brass-400"
             >
               Upload another
             </button>

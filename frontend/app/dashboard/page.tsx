@@ -15,7 +15,6 @@ import {
   Compass,
   FlaskConical,
   Bot,
-  ChevronDown,
 } from "lucide-react";
 import { API_BASE, type FileTreeNode, type ScanSummary } from "@/lib/api";
 import FileTree from "@/components/FileTree";
@@ -106,7 +105,7 @@ function DashboardBody() {
   return (
     <>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="font-mono text-xs uppercase tracking-[0.08em] text-bone-600">
+        <p className="max-w-full break-all font-mono text-xs uppercase tracking-[0.08em] text-bone-600">
           Session &middot; {sessionId}
         </p>
         <a
@@ -165,41 +164,8 @@ function TabBar({
   active: TabId;
   setActive: (id: TabId) => void;
 }) {
-  const activeTab = TABS.find((t) => t.id === active);
-
   return (
-    <div className="mt-8 border-b border-white/10">
-      {/* Mobile: dropdown select \u2014 many tabs in a horizontal scroll row
-          doesn't work well on small screens (no visual hint that more
-          tabs exist off-screen). */}
-      <div className="pb-3 sm:hidden">
-        <label className="relative block">
-          <select
-            value={active}
-            onChange={(e) => setActive(e.target.value as TabId)}
-            className="w-full appearance-none border border-white/15 bg-soil-900 py-3 pl-4 pr-10 font-mono text-xs uppercase tracking-[0.08em] text-bone-100 focus:border-brass-400 focus:outline-none"
-          >
-            {TABS.map((tab) => (
-              <option key={tab.id} value={tab.id}>
-                {tab.label}
-              </option>
-            ))}
-          </select>
-          {activeTab && (
-            <activeTab.icon
-              size={15}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brass-400"
-            />
-          )}
-          <ChevronDown
-            size={15}
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-bone-500"
-          />
-        </label>
-      </div>
-
-      {/* Tablet/desktop: horizontal tab row */}
-      <div className="hidden gap-1 overflow-x-auto sm:flex">
+    <div className="mt-8 flex gap-1 overflow-x-auto border-b border-white/10">
       {TABS.map((tab) => {
         const isActive = active === tab.id;
         return (
@@ -217,8 +183,6 @@ function TabBar({
           </button>
         );
       })}
-      </div>
-
     </div>
   );
 }

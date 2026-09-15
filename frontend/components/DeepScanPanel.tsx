@@ -144,7 +144,7 @@ export default function DeepScanPanel({ sessionId }: { sessionId: string }) {
                       <p className="truncate text-bone-200">
                         {t.text || "(no message)"}
                       </p>
-                      <p className="font-mono text-xs text-bone-600">
+                      <p className="break-words font-mono text-xs text-bone-600">
                         {f.path}:{t.line}
                       </p>
                     </div>

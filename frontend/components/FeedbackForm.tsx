@@ -74,7 +74,7 @@ export default function FeedbackForm({ sessionId }: { sessionId?: string }) {
               key={star}
               onClick={() => handleRate(star)}
               aria-label={`${star} stars`}
-              className="transition-colors"
+              className="-m-2 p-2 transition-colors sm:-m-0 sm:p-0"
             >
               <Star
                 size={20}

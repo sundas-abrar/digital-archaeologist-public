@@ -68,16 +68,16 @@ export default function InterpretationPanel({ sessionId }: { sessionId: string }
 
   return (
     <div className="border border-white/10 bg-soil-900/40 p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-bone-200">
-          <Sparkles size={16} className="text-brass-400" />
-          <h3 className="font-mono text-sm font-semibold">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-bone-200">
+          <Sparkles size={16} className="shrink-0 text-brass-400" />
+          <h3 className="truncate font-mono text-sm font-semibold">
             {data.project_title || "Project reconstructed"}
           </h3>
         </div>
         <button
           onClick={run}
-          className="inline-flex items-center gap-1.5 border border-white/15 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.08em] text-bone-400 transition-colors hover:border-brass-400 hover:text-brass-400"
+          className="inline-flex shrink-0 items-center gap-1.5 border border-white/15 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.08em] text-bone-400 transition-colors hover:border-brass-400 hover:text-brass-400"
         >
           <RefreshCw size={12} />
           Re-interpret

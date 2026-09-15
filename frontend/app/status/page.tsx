@@ -37,7 +37,7 @@ export default function Home() {
           <span className="h-px w-6 bg-brass-400" />
           Site log &middot; excavation not yet begun
         </p>
-        <h1 className="text-5xl font-bold uppercase leading-tight tracking-tight text-bone-100">
+        <h1 className="text-4xl font-bold uppercase leading-tight tracking-tight text-bone-100 sm:text-5xl">
           Digital Archaeologist
         </h1>
         <p className="mt-4 max-w-lg text-lg leading-relaxed text-bone-400">
@@ -72,19 +72,19 @@ export default function Home() {
 
         <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 font-mono text-sm">
           <dt className="text-bone-600">Frontend</dt>
-          <dd className="text-bone-200">Next.js &middot; running</dd>
+          <dd className="min-w-0 break-words text-bone-200">Next.js &middot; running</dd>
 
           <dt className="text-bone-600">Backend target</dt>
-          <dd className="text-bone-200">{API_BASE}/api/health</dd>
+          <dd className="min-w-0 break-words text-bone-200">{API_BASE}/api/health</dd>
 
           <dt className="text-bone-600">Last probe</dt>
-          <dd className="text-bone-200">{lastChecked || "\u2014"}</dd>
+          <dd className="min-w-0 break-words text-bone-200">{lastChecked || "\u2014"}</dd>
 
           <dt className="text-bone-600">Detail</dt>
           <dd
-            className={
+            className={`min-w-0 break-words ${
               phase === "disconnected" ? "text-rust-400" : "text-bone-200"
-            }
+            }`}
           >
             {detail || "\u2014"}
           </dd>

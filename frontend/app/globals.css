@@ -7,9 +7,24 @@
 :root {
   --font-display: "Inter Tight", ui-sans-serif, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+  /* Per-level indentation step for nested tree UI (FileTree). Reduced on
+     mobile so deep nesting can't consume most of a 320-430px screen;
+     unchanged at sm: and up (640px+), matching the original 18px value
+     exactly so desktop/tablet layout is pixel-identical. */
+  --tree-indent-step: 10px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --tree-indent-step: 18px;
+  }
 }
 
 body {
+  /* Mobile-only safety net: catches any residual horizontal overflow so the
+     whole page can't scroll sideways. This is a no-op whenever content
+     already fits (i.e. on desktop), since there's nothing to clip. */
+  overflow-x: hidden;
   background-color: #0A0A0B;
   background-image:
     radial-gradient(ellipse at top, rgba(192, 138, 78, 0.05), transparent 55%),

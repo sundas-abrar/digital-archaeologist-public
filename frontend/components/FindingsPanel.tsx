@@ -194,7 +194,7 @@ function FindingFeedback({
         <button
           disabled={submitting || !!sent}
           onClick={() => send("correct")}
-          className={`flex items-center gap-1 transition-colors disabled:opacity-50 ${
+          className={`-m-2 flex items-center gap-1 p-2 transition-colors disabled:opacity-50 sm:-m-0 sm:p-0 ${
             sent === "correct" ? "text-moss-400" : "text-bone-500 hover:text-moss-400"
           }`}
           aria-label="Correct"
@@ -204,7 +204,7 @@ function FindingFeedback({
         <button
           disabled={submitting || !!sent}
           onClick={() => setShowNote((v) => !v)}
-          className={`flex items-center gap-1 transition-colors disabled:opacity-50 ${
+          className={`-m-2 flex items-center gap-1 p-2 transition-colors disabled:opacity-50 sm:-m-0 sm:p-0 ${
             sent === "incorrect" ? "text-rust-400" : "text-bone-500 hover:text-rust-400"
           }`}
           aria-label="Incorrect"
@@ -375,7 +375,7 @@ export default function FindingsPanel({ sessionId }: { sessionId: string }) {
                     {f.evidence.map((e) => (
                       <span
                         key={e}
-                        className="bg-soil-800 px-1.5 py-0.5 font-mono text-xs text-bone-500"
+                        className="max-w-full break-words bg-soil-800 px-1.5 py-0.5 font-mono text-xs text-bone-500"
                       >
                         {e}
                       </span>
