@@ -15,16 +15,20 @@ venv/
 env/
 __pycache__/
 *.pyc
+.pytest_cache/
+*.egg-info/
 
 # --- Node (in case node_modules ends up outside frontend/) ---
 node_modules/
 .next/
+*.tsbuildinfo
 
-# --- Secrets \u2014 never commit real keys ---
+# --- Secrets - never commit real keys ---
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+*.pem
+*.key
 
 # --- Uploaded/generated runtime data ---
 backend/storage/*
