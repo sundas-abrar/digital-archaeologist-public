@@ -40,10 +40,30 @@ def _event(step: str, status: str, detail: str, data: dict[str, Any] | None = No
     return {"step": step, "status": status, "detail": detail, "data": data or {}}
 
 
-def run_agent(root: Path, goal: str) -> Iterator[dict[str, Any]]:
-    goal = (goal or "Determine how this project evolved.").strip()
+# A half run skips the two steps that are slow, cost tokens, or execute
+# uploaded code. Keep in sync with HALF_SKIPS in the frontend.
+HALF_SKIPS = {"test", "interpret"}
 
-    yield _event("plan", "done", f'Goal: "{goal}". Plan: scan \u2192 extract evidence \u2192 find relationships \u2192 test \u2192 interpret \u2192 report.')
+
+def run_agent(
+    root: Path,
+    goal: str,
+    depth: str = "full",
+    history: list[str] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """depth: "full" runs every step. "half" skips test execution and the
+    AI narrative. history: already-trimmed memory items (see services.memory)."""
+    goal = (goal or "Determine how this project evolved.").strip()
+    half = depth == "half"
+    history = history or []
+
+    route = "scan \u2192 extract evidence \u2192 find relationships \u2192 report" if half else (
+        "scan \u2192 extract evidence \u2192 find relationships \u2192 test \u2192 interpret \u2192 report"
+    )
+    plan = f'Goal: "{goal}". {"Half run" if half else "Full run"}. Plan: {route}.'
+    if history:
+        plan += f" Using {len(history)} remembered item(s) from earlier in this session."
+    yield _event("plan", "done", plan)
 
     yield _event("scan", "running", "Scanning file structure and metadata...")
     try:
@@ -89,12 +109,16 @@ def run_agent(root: Path, goal: str) -> Iterator[dict[str, Any]]:
     # Agent mode never applies fixes on its own \u2014 that always stays a
     # human-approved action in the Testing/QA tab.
     qa_run_result: dict[str, Any] | None = None
-    try:
-        suggestions = detect_test_commands(root)["suggestions"]
-    except Exception:  # noqa: BLE001
-        suggestions = []
+    suggestions: list[dict[str, Any]] = []
+    if not half:
+        try:
+            suggestions = detect_test_commands(root)["suggestions"]
+        except Exception:  # noqa: BLE001
+            suggestions = []
 
-    if suggestions:
+    if half:
+        yield _event("test", "skipped", "Half run: test execution skipped.")
+    elif suggestions:
         cmd = suggestions[0]["command"]
         yield _event("test", "running", f"Executing: {cmd}")
         try:
@@ -116,23 +140,29 @@ def run_agent(root: Path, goal: str) -> Iterator[dict[str, Any]]:
     else:
         yield _event("test", "skipped", "No runnable test/entry point detected for this project type.")
 
-    yield _event("interpret", "running", "Sending evidence (not raw files) to the AI for narrative reconstruction...")
-    evidence = build_evidence_bundle(summary, deep, findings_result)
-    try:
-        interpretation = interpret_project(evidence)
-    except Exception as e:  # noqa: BLE001
-        interpretation = {"available": False, "error": str(e)}
-
-    if interpretation.get("available"):
-        yield _event("interpret", "done", interpretation.get("narrative", "") or "Narrative reconstructed.", {"interpretation": interpretation})
+    if half:
+        interpretation = {"available": False, "skipped": True, "error": "Half run: AI narrative skipped."}
+        yield _event("interpret", "skipped", interpretation["error"], {"interpretation": interpretation})
     else:
-        yield _event("interpret", "skipped", interpretation.get("error", "AI interpretation unavailable."), {"interpretation": interpretation})
+        yield _event("interpret", "running", "Sending evidence (not raw files) to the AI for narrative reconstruction...")
+        evidence = build_evidence_bundle(summary, deep, findings_result)
+        try:
+            interpretation = interpret_project(evidence, goal=goal, history=history)
+        except Exception as e:  # noqa: BLE001
+            interpretation = {"available": False, "error": str(e)}
+
+        if interpretation.get("available"):
+            yield _event("interpret", "done", interpretation.get("narrative", "") or "Narrative reconstructed.", {"interpretation": interpretation})
+        else:
+            yield _event("interpret", "skipped", interpretation.get("error", "AI interpretation unavailable."), {"interpretation": interpretation})
 
     yield _event(
         "report", "done",
         "Investigation complete.",
         {
             "goal": goal,
+            "depth": "half" if half else "full",
+            "memory_items_used": len(history),
             "summary": summary,
             "deep_scan": deep,
             "findings": findings_result,

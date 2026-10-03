@@ -11,8 +11,8 @@ from ..services.scanner import build_file_tree, scan_summary
 
 router = APIRouter(prefix="/api", tags=["upload"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-STORAGE_DIR.mkdir(exist_ok=True)
+from ..config import STORAGE_DIR
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Anything that could run as code on the server/host is rejected outright.
 # Everything else (docs, text, images, code files, archives) is welcome —

@@ -15,6 +15,9 @@ import {
   Compass,
   FlaskConical,
   Bot,
+  MessageCircle,
+  MoreHorizontal,
+  X,
 } from "lucide-react";
 import { API_BASE, type FileTreeNode, type ScanSummary } from "@/lib/api";
 import FileTree from "@/components/FileTree";
@@ -26,10 +29,12 @@ import FeedbackForm from "@/components/FeedbackForm";
 import InvestigationPanel from "@/components/InvestigationPanel";
 import QAPanel from "@/components/QAPanel";
 import AgentPanel from "@/components/AgentPanel";
+import AskPanel from "@/components/AskPanel";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "agent", label: "Agent Mode", icon: Bot },
+  { id: "ask", label: "Ask the Dig Site", icon: MessageCircle },
   { id: "investigation", label: "Investigation", icon: Compass },
   { id: "timeline", label: "Timeline", icon: Clock },
   { id: "evolution", label: "Code Evolution", icon: Code2 },
@@ -40,6 +45,10 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+// Shown in the fixed bottom bar on phones; everything else lives under "More".
+const PRIMARY_MOBILE: TabId[] = ["overview", "agent", "findings", "files"];
+const SHORT_LABEL: Partial<Record<TabId, string>> = { files: "Files", agent: "Agent" };
 
 
 function EmptyState({ label }: { label: string }) {
@@ -96,7 +105,7 @@ function DashboardBody() {
   if (!sessionId) {
     return (
       <>
-        <TabBar active={active} setActive={setActive} />
+        <Nav active={active} setActive={setActive} />
         <EmptyState label={TABS.find((t) => t.id === active)?.label ?? ""} />
       </>
     );
@@ -118,7 +127,7 @@ function DashboardBody() {
         </a>
       </div>
 
-      <TabBar active={active} setActive={setActive} />
+      <Nav active={active} setActive={setActive} />
 
       {loadError && (
         <p className="mt-6 border border-rust-400/40 bg-soil-800 px-4 py-3 text-sm text-rust-400">
@@ -126,7 +135,7 @@ function DashboardBody() {
         </p>
       )}
 
-      <div className="mt-8">
+      <div className="mt-3 md:mt-8">
         {active === "overview" && (
           <OverviewPanel
             sessionId={sessionId}
@@ -136,6 +145,8 @@ function DashboardBody() {
         )}
 
         {active === "agent" && <AgentPanel sessionId={sessionId} />}
+
+        {active === "ask" && <AskPanel sessionId={sessionId} />}
 
         {active === "investigation" && (
           <InvestigationPanel sessionId={sessionId} summary={summary} />
@@ -157,7 +168,7 @@ function DashboardBody() {
   );
 }
 
-function TabBar({
+function Nav({
   active,
   setActive,
 }: {
@@ -165,7 +176,113 @@ function TabBar({
   setActive: (id: TabId) => void;
 }) {
   return (
-    <div className="mt-8 flex gap-1 overflow-x-auto border-b border-white/10">
+    <>
+      <DesktopTabs active={active} setActive={setActive} />
+      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.08em] text-brass-400 md:hidden">
+        {TABS.find((t) => t.id === active)?.label}
+      </p>
+      <MobileNav active={active} setActive={setActive} />
+    </>
+  );
+}
+
+function MobileNav({
+  active,
+  setActive,
+}: {
+  active: TabId;
+  setActive: (id: TabId) => void;
+}) {
+  const [sheet, setSheet] = useState(false);
+  const primary = TABS.filter((t) => PRIMARY_MOBILE.includes(t.id));
+  const more = TABS.filter((t) => !PRIMARY_MOBILE.includes(t.id));
+
+  return (
+    <>
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-white/10 bg-soil-950/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {primary.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActive(t.id)}
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 font-mono text-[11px] uppercase tracking-[0.04em] ${
+              active === t.id ? "text-brass-400" : "text-bone-500"
+            }`}
+          >
+            <t.icon size={17} />
+            {SHORT_LABEL[t.id] ?? t.label.split(" ")[0]}
+          </button>
+        ))}
+        <button
+          onClick={() => setSheet(true)}
+          className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 font-mono text-[11px] uppercase tracking-[0.04em] ${
+            more.some((t) => t.id === active) ? "text-brass-400" : "text-bone-500"
+          }`}
+        >
+          <MoreHorizontal size={17} />
+          More
+        </button>
+      </nav>
+
+      {sheet && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            aria-label="Close"
+            className="absolute inset-0 bg-soil-950/80"
+            onClick={() => setSheet(false)}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-soil-900 p-4"
+            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
+                More sections
+              </p>
+              <button
+                aria-label="Close"
+                onClick={() => setSheet(false)}
+                className="flex h-11 w-11 items-center justify-center text-bone-500"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <ul className="mt-1">
+              {more.map((t) => (
+                <li key={t.id}>
+                  <button
+                    onClick={() => {
+                      setActive(t.id);
+                      setSheet(false);
+                    }}
+                    className={`flex min-h-[48px] w-full items-center gap-3 border-b border-white/5 font-mono text-xs uppercase tracking-[0.08em] ${
+                      active === t.id ? "text-brass-400" : "text-bone-300"
+                    }`}
+                  >
+                    <t.icon size={15} className="shrink-0" />
+                    {t.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function DesktopTabs({
+  active,
+  setActive,
+}: {
+  active: TabId;
+  setActive: (id: TabId) => void;
+}) {
+  return (
+    <div className="mt-8 hidden gap-1 overflow-x-auto border-b border-white/10 md:flex">
       {TABS.map((tab) => {
         const isActive = active === tab.id;
         return (
@@ -189,12 +306,12 @@ function TabBar({
 
 export default function DashboardPage() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
+    <main className="mx-auto max-w-5xl px-4 pb-28 pt-8 sm:px-6 md:pb-16 md:pt-16">
       <p className="mb-2 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.15em] text-brass-400">
         <span className="h-px w-6 bg-brass-400" />
         Dig site
       </p>
-      <h1 className="text-4xl font-bold uppercase tracking-tight text-bone-100">Dashboard</h1>
+      <h1 className="text-3xl font-bold uppercase tracking-tight text-bone-100 md:text-4xl">Dashboard</h1>
 
       <Suspense fallback={null}>
         <DashboardBody />

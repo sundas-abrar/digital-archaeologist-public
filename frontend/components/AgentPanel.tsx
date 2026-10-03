@@ -17,6 +17,17 @@ import {
   Play,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
+import {
+  CrewLanes,
+  DEPTH_OPTIONS,
+  MEMORY_OPTIONS,
+  MemoryPanel,
+  Segmented,
+  memoryForRequest,
+  pushHistory,
+  useMemoryMode,
+  useRunDepth,
+} from "@/components/AgentControls";
 
 type StepId =
   | "plan"
@@ -69,6 +80,9 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
   const [finalData, setFinalData] = useState<Record<string, unknown> | null>(null);
   const [connError, setConnError] = useState("");
   const sourceRef = useRef<EventSource | null>(null);
+  const [depth, setDepth] = useRunDepth();
+  const [memory, setMemory] = useMemoryMode();
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -82,8 +96,15 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
     setFinalData(null);
     setConnError("");
     setRunning(true);
+    setStarted(true);
 
-    const url = `${API_BASE}/api/agent/${sessionId}/run?goal=${encodeURIComponent(goal)}`;
+    // Memory: send only what the chosen mode allows, then remember this goal.
+    const remembered = memoryForRequest(sessionId, memory);
+    pushHistory(sessionId, goal.trim());
+
+    const qs = new URLSearchParams({ goal, depth, memory });
+    if (remembered.length) qs.set("history", JSON.stringify(remembered));
+    const url = `${API_BASE}/api/agent/${sessionId}/run?${qs.toString()}`;
     const source = new EventSource(url);
     sourceRef.current = source;
 
@@ -146,14 +167,32 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           disabled={running}
+          maxLength={500}
           placeholder="e.g. Determine how this project evolved."
           className="mt-4 w-full border border-white/15 bg-soil-950 px-3 py-2 text-sm text-bone-200 placeholder:text-bone-700 focus:border-brass-400 focus:outline-none disabled:opacity-60"
         />
 
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Segmented
+            label="Run depth"
+            value={depth}
+            onChange={setDepth}
+            options={DEPTH_OPTIONS}
+            disabled={running}
+          />
+          <Segmented
+            label="Memory"
+            value={memory}
+            onChange={setMemory}
+            options={MEMORY_OPTIONS}
+            disabled={running}
+          />
+        </div>
+
         <button
           onClick={start}
           disabled={running || !goal.trim()}
-          className="mt-3 inline-flex items-center gap-2 border border-brass-500/60 px-4 py-2 font-mono text-xs uppercase tracking-[0.1em] text-bone-100 transition-colors hover:border-brass-400 hover:bg-brass-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 border border-brass-500/60 px-4 py-2 sm:w-auto font-mono text-xs uppercase tracking-[0.1em] text-bone-100 transition-colors hover:border-brass-400 hover:bg-brass-500/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {running ? (
             <Loader2 size={13} className="animate-spin" />
@@ -169,6 +208,17 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
           </p>
         )}
       </div>
+
+      <MemoryPanel sessionId={sessionId} mode={memory} />
+
+      {(started || log.length > 0) && (
+        <div className="border border-white/10 bg-soil-900/40 p-4 sm:p-5">
+          <h4 className="mb-3 font-mono text-xs uppercase tracking-[0.1em] text-bone-500">
+            Crew
+          </h4>
+          <CrewLanes log={log} depth={depth} started={started} />
+        </div>
+      )}
 
       {log.length > 0 && (
         <div className="border border-white/10 bg-soil-900/40 p-5">
@@ -195,7 +245,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
                         {meta.label}
                       </span>
                       <span
-                        className={`flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.06em] ${STATUS_STYLE[e.status].split(" ")[1]}`}
+                        className={`flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em] ${STATUS_STYLE[e.status].split(" ")[1]}`}
                       >
                         <StatusIcon status={e.status} />
                         {e.status}
@@ -224,7 +274,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
                   ? (finalData.summary as { total_files: number }).total_files
                   : "\u2014"}
               </p>
-              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-bone-600">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
                 files
               </p>
             </div>
@@ -232,7 +282,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
               <p className="font-mono text-lg text-bone-100">
                 {findings?.total_findings ?? "\u2014"}
               </p>
-              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-bone-600">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
                 findings
               </p>
             </div>
@@ -240,7 +290,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
               <p className="font-mono text-lg text-bone-100">
                 {findings?.findings?.filter((f) => f.severity === "anomaly").length ?? 0}
               </p>
-              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-bone-600">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
                 anomalies
               </p>
             </div>
@@ -248,7 +298,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
               <p className="font-mono text-lg text-bone-100">
                 {interpretation?.available ? "Yes" : "No"}
               </p>
-              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-bone-600">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
                 AI narrative
               </p>
             </div>

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
+from ..config import STORAGE_DIR
 FEEDBACK_FILE = STORAGE_DIR / "feedback.jsonl"
 
 VALID_TYPES = {

@@ -9,9 +9,7 @@ from ..services.findings_engine import generate_findings, investigate_finding
 
 router = APIRouter(prefix="/api", tags=["scan"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-
-
+from ..config import STORAGE_DIR
 @router.get("/scan/{session_id}")
 def scan_session(session_id: str):
     extract_dir = STORAGE_DIR / session_id / "extracted"

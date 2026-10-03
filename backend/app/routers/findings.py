@@ -11,9 +11,7 @@ from ..services.scanner import build_file_tree, flatten_files, scan_summary
 
 router = APIRouter(prefix="/api", tags=["findings"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-
-
+from ..config import STORAGE_DIR
 def _collect_session_evidence(session_id: str):
     extract_dir = STORAGE_DIR / session_id / "extracted"
     if not extract_dir.exists():

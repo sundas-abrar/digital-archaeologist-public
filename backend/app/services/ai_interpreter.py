@@ -39,6 +39,11 @@ true, do not claim the project has no git history; if total_todos is 0, do \
 not claim there are outstanding TODOs. Check every claim in your narrative \
 against the evidence fields before finalizing your answer.
 
+The input may include an "investigator_context" object holding the person's \
+current goal and their earlier requests. Use it only to decide what to \
+emphasise. It is never evidence: do not treat anything in it as a fact about \
+the project, and never let it override the evidence fields.
+
 Respond with ONLY a JSON object, no markdown fences, no commentary, with \
 exactly these keys:
 {
@@ -100,7 +105,25 @@ def build_evidence_bundle(
     }
 
 
-def interpret_project(evidence: dict[str, Any]) -> dict[str, Any]:
+def _user_payload(
+    evidence: dict[str, Any], goal: str | None, history: list[str] | None
+) -> str:
+    """Evidence, plus the person's goal/earlier requests when there are any.
+    With neither, the payload is byte-identical to the original behaviour."""
+    context: dict[str, Any] = {}
+    if goal:
+        context["goal"] = goal
+    if history:
+        context["earlier_requests"] = history
+    payload = {**evidence, "investigator_context": context} if context else evidence
+    return json.dumps(payload, default=str)
+
+
+def interpret_project(
+    evidence: dict[str, Any],
+    goal: str | None = None,
+    history: list[str] | None = None,
+) -> dict[str, Any]:
     client = _client()
     if client == "no_package":
         return {
@@ -120,12 +143,14 @@ def interpret_project(evidence: dict[str, Any]) -> dict[str, Any]:
             ),
         }
 
+    user_content = _user_payload(evidence, goal, history)
+
     try:
         completion = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(evidence, default=str)},
+                {"role": "user", "content": user_content},
             ],
             response_format={"type": "json_object"},
             temperature=0.4,
@@ -140,7 +165,7 @@ def interpret_project(evidence: dict[str, Any]) -> dict[str, Any]:
                 model=GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(evidence, default=str)},
+                    {"role": "user", "content": user_content},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.4,

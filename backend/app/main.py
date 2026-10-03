@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import scan, upload, interpret, report, feedback, qa, agent
+from .routers import scan, upload, interpret, report, feedback, qa, agent, ask
 
 # Load backend/.env explicitly \u2014 don't rely on the process's current
 # working directory, since `uvicorn app.main:app` can be launched from
@@ -44,6 +44,7 @@ app.include_router(report.router)
 app.include_router(feedback.router)
 app.include_router(qa.router)
 app.include_router(agent.router)
+app.include_router(ask.router)
 
 
 

@@ -8,9 +8,7 @@ from ..services.report_builder import build_report_data, render_report_pdf
 
 router = APIRouter(prefix="/api", tags=["report"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-
-
+from ..config import STORAGE_DIR
 @router.get("/report/{session_id}")
 def download_report(session_id: str, format: str = "pdf"):
     """Download the full investigation report for a session.

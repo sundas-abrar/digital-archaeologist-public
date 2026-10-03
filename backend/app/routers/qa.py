@@ -15,9 +15,7 @@ from ..services.qa_runner import (
 
 router = APIRouter(prefix="/api/qa", tags=["qa"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-
-
+from ..config import STORAGE_DIR
 def _extract_dir(session_id: str) -> Path:
     d = STORAGE_DIR / session_id / "extracted"
     if not d.exists():

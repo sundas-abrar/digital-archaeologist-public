@@ -9,11 +9,13 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("checking");
   const [detail, setDetail] = useState<string>("");
   const [lastChecked, setLastChecked] = useState<string>("");
+  const [misses, setMisses] = useState(0);
 
   async function runCheck() {
     setPhase("checking");
     const result: HealthStatus = await checkHealth();
     setPhase(result.ok ? "connected" : "disconnected");
+    setMisses((n) => (result.ok ? 0 : n + 1));
     setDetail(result.ok ? `status: ${result.status}` : result.message ?? "");
     setLastChecked(new Date().toLocaleTimeString());
   }
@@ -31,7 +33,7 @@ export default function Home() {
   }[phase];
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col justify-center px-6 py-20">
+    <main className="mx-auto flex max-w-3xl flex-col justify-center px-4 py-12 sm:px-6 sm:py-20">
       <header className="mb-14">
         <p className="mb-3 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.15em] text-brass-400">
           <span className="h-px w-6 bg-brass-400" />
@@ -92,9 +94,9 @@ export default function Home() {
 
         {phase === "disconnected" && (
           <p className="mt-5 border border-white/10 bg-soil-800 px-4 py-3 text-sm text-bone-400">
-            No response yet. This is expected until Phase 1's FastAPI service
-            is running with a <code className="text-brass-400">/api/health</code>{" "}
-            route.
+            {misses <= 6
+              ? "The backend may be waking up. Free hosting on Render sleeps when idle, so the first request can take up to a minute. This page keeps retrying automatically."
+              : "Still no response. Check that the FastAPI service is running and that NEXT_PUBLIC_API_URL points at it."}
           </p>
         )}
       </section>

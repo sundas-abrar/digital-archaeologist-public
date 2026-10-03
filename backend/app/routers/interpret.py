@@ -11,9 +11,7 @@ from ..services.ai_interpreter import build_evidence_bundle, interpret_project
 
 router = APIRouter(prefix="/api", tags=["interpret"])
 
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage"
-
-
+from ..config import STORAGE_DIR
 @router.get("/interpret/{session_id}")
 def interpret_session(session_id: str):
     """Phase 5: send structured evidence (not the raw repo) to the LLM."""
