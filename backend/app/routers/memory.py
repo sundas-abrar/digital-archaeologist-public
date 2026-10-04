@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException
 
 from ..config import STORAGE_DIR
 from ..services import memory_store
-from ..services.memory import MEMORY_LIMITS
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
 
@@ -26,7 +25,7 @@ def get_memory(session_id: str, mode: Literal["off", "half", "full"] = "half"):
     request in `mode` would actually use; `stored` is everything saved."""
     _require_session(session_id)
     try:
-        sent = memory_store.recent(session_id, MEMORY_LIMITS[mode])
+        sent = memory_store.recall_entries(session_id, mode)
         stored = memory_store.count(session_id)
     except (sqlite3.Error, OSError) as e:
         raise HTTPException(status_code=503, detail=f"Memory store unavailable: {e}") from e
@@ -42,3 +41,16 @@ def forget(session_id: str):
     except (sqlite3.Error, OSError) as e:
         raise HTTPException(status_code=503, detail=f"Memory store unavailable: {e}") from e
     return {"session_id": session_id, "cleared": cleared}
+
+
+@router.post("/{session_id}/pin/{item_id}")
+def pin_item(session_id: str, item_id: int, pinned: bool = True):
+    """Pin (or unpin) one memory item so pruning never drops it."""
+    _require_session(session_id)
+    try:
+        ok = memory_store.pin(session_id, item_id, pinned)
+    except (sqlite3.Error, OSError) as e:
+        raise HTTPException(status_code=503, detail=f"Memory store unavailable: {e}") from e
+    if not ok:
+        raise HTTPException(status_code=409, detail="Item not found, or the pin limit is reached.")
+    return {"session_id": session_id, "id": item_id, "pinned": pinned}

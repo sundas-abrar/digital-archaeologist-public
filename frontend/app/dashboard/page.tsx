@@ -17,6 +17,7 @@ import {
   Bot,
   MessageCircle,
   MoreHorizontal,
+  Wand2,
   X,
 } from "lucide-react";
 import { API_BASE, type FileTreeNode, type ScanSummary } from "@/lib/api";
@@ -30,11 +31,13 @@ import InvestigationPanel from "@/components/InvestigationPanel";
 import QAPanel from "@/components/QAPanel";
 import AgentPanel from "@/components/AgentPanel";
 import AskPanel from "@/components/AskPanel";
+import GeneratePanel from "@/components/GeneratePanel";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "agent", label: "Agent Mode", icon: Bot },
   { id: "ask", label: "Ask the Dig Site", icon: MessageCircle },
+  { id: "generate", label: "Generate", icon: Wand2 },
   { id: "investigation", label: "Investigation", icon: Compass },
   { id: "timeline", label: "Timeline", icon: Clock },
   { id: "evolution", label: "Code Evolution", icon: Code2 },
@@ -147,6 +150,8 @@ function DashboardBody() {
         {active === "agent" && <AgentPanel sessionId={sessionId} />}
 
         {active === "ask" && <AskPanel sessionId={sessionId} />}
+
+        {active === "generate" && <GeneratePanel sessionId={sessionId} />}
 
         {active === "investigation" && (
           <InvestigationPanel sessionId={sessionId} summary={summary} />

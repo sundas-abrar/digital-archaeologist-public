@@ -214,7 +214,7 @@ export function CrewLanes({
 /* Memory panel: reads what the SERVER saved for this project          */
 /* ------------------------------------------------------------------ */
 
-type MemoryItem = { id: number; kind: "goal" | "question"; text: string };
+type MemoryItem = { id: number | null; kind: "goal" | "question" | "summary"; text: string; pinned?: number };
 
 export function MemoryPanel({
   sessionId,
@@ -231,6 +231,13 @@ export function MemoryPanel({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pinTick, setPinTick] = useState(0);
+
+  async function togglePin(m: MemoryItem) {
+    if (m.id == null) return;
+    await fetch(`${API_BASE}/api/memory/${sessionId}/pin/${m.id}?pinned=${m.pinned ? "false" : "true"}`, { method: "POST" });
+    setPinTick((t) => t + 1);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -252,7 +259,7 @@ export function MemoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, mode, refreshKey]);
+  }, [sessionId, mode, refreshKey, pinTick]);
 
   async function forget() {
     if (!window.confirm("Forget everything the agent remembers about this project?")) return;
@@ -303,9 +310,15 @@ export function MemoryPanel({
       ) : (
         <ul className="mt-3 space-y-2">
           {sent.map((m) => (
-            <li key={m.id} className="border-l-2 border-brass-500/40 pl-3">
+            <li key={m.id ?? "summary"} className="border-l-2 border-brass-500/40 pl-3">
               <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
                 {m.kind}
+                {m.id != null && (
+                  <button onClick={() => togglePin(m)} className="ml-2 text-brass-400 hover:underline">
+                    {m.pinned ? "unpin" : "pin"}
+                  </button>
+                )}
+                {m.pinned ? " \u00b7 pinned" : ""}
               </p>
               <p className="break-words text-sm text-bone-300">{m.text}</p>
             </li>

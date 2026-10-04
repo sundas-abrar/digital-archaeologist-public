@@ -26,12 +26,13 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 
-from .memory import MEMORY_LIMITS, clean_history
+from .memory import FULL_RECENT, MEMORY_LIMITS, clean_history, summarize
 
 log = logging.getLogger(__name__)
 
 KINDS = ("goal", "question")
-MAX_STORED_PER_SESSION = 50
+MAX_STORED_PER_SESSION = 50  # unpinned items kept per session
+MAX_PINNED = 10  # pinned items are never pruned, but are capped
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS memory (
@@ -39,7 +40,8 @@ CREATE TABLE IF NOT EXISTS memory (
     session_id TEXT NOT NULL,
     kind       TEXT NOT NULL,
     text       TEXT NOT NULL,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    pinned     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_memory_session ON memory (session_id, id);
 """
@@ -81,6 +83,10 @@ def _ensure_schema(path: Path) -> None:
         conn = sqlite3.connect(path, timeout=10)
         try:
             conn.executescript(_SCHEMA)
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(memory)")]
+            if "pinned" not in cols:  # database created before pinning existed
+                conn.execute("ALTER TABLE memory ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+                conn.commit()
         finally:
             conn.close()
         _schema_ready_for = path
@@ -141,8 +147,8 @@ def add(session_id: str, kind: str, text: str) -> bool:
             (session_id, kind, value, time.time()),
         )
         conn.execute(
-            """DELETE FROM memory WHERE session_id = ? AND id NOT IN (
-                   SELECT id FROM memory WHERE session_id = ? ORDER BY id DESC LIMIT ?)""",
+            """DELETE FROM memory WHERE session_id = ? AND pinned = 0 AND id NOT IN (
+                   SELECT id FROM memory WHERE session_id = ? AND pinned = 0 ORDER BY id DESC LIMIT ?)""",
             (session_id, session_id, MAX_STORED_PER_SESSION),
         )
     return True
@@ -154,11 +160,34 @@ def recent(session_id: str, limit: int) -> list[dict[str, Any]]:
         return []
     with closing(_connect()) as conn:
         rows = conn.execute(
-            "SELECT id, kind, text, created_at FROM memory "
+            "SELECT id, kind, text, created_at, pinned FROM memory "
             "WHERE session_id = ? ORDER BY id DESC LIMIT ?",
             (session_id, limit),
         ).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+def all_entries(session_id: str) -> list[dict[str, Any]]:
+    """Everything stored for the session, oldest first."""
+    with closing(_connect()) as conn:
+        rows = conn.execute(
+            "SELECT id, kind, text, created_at, pinned FROM memory WHERE session_id = ? ORDER BY id",
+            (session_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def pin(session_id: str, item_id: int, pinned: bool = True) -> bool:
+    """Pin/unpin one item. Pinned items survive pruning. False if not found
+    or the pin limit is reached."""
+    with _write_txn() as conn:
+        if pinned:
+            n = conn.execute("SELECT COUNT(*) FROM memory WHERE session_id = ? AND pinned = 1", (session_id,)).fetchone()[0]
+            if n >= MAX_PINNED:
+                return False
+        cur = conn.execute("UPDATE memory SET pinned = ? WHERE id = ? AND session_id = ?",
+                           (1 if pinned else 0, item_id, session_id))
+        return cur.rowcount > 0
 
 
 def count(session_id: str) -> int:
@@ -180,13 +209,28 @@ def clear(session_id: str) -> int:
 # --------------------------------------------------------------------- #
 
 
+def recall_entries(session_id: str, mode: str) -> list[dict[str, Any]]:
+    """What a request in `mode` may use, as entries. half: pinned + last 3.
+    full: summary of older items + pinned + last FULL_RECENT."""
+    if MEMORY_LIMITS.get(mode, 0) == 0:
+        return []
+    rows = all_entries(session_id)
+    keep = MEMORY_LIMITS["half"] if mode == "half" else FULL_RECENT
+    recent_rows = rows[-keep:]
+    older = rows[:-keep]
+    pinned = [r for r in older if r["pinned"]]
+    out = pinned + recent_rows
+    if mode == "full":
+        rest = [r["text"] for r in older if not r["pinned"]]
+        if rest:
+            out = [{"id": None, "kind": "summary", "text": summarize(rest), "created_at": 0, "pinned": 0}] + out
+    return out
+
+
 def recall(session_id: str, mode: str) -> list[str]:
     """What a request in `mode` is allowed to use, as plain strings."""
-    limit = MEMORY_LIMITS.get(mode, 0)
-    if limit == 0:
-        return []
     try:
-        return [e["text"] for e in recent(session_id, limit)]
+        return [e["text"] for e in recall_entries(session_id, mode)]
     except (sqlite3.Error, OSError):
         log.exception("memory recall failed; continuing without memory")
         return []

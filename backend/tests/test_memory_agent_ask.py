@@ -82,7 +82,8 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(memory_store.recall("s1", "off"), [])
         self.assertEqual(memory_store.recall("s1", "half"), ["goal 9", "goal 10", "goal 11"])
         full = memory_store.recall("s1", "full")
-        self.assertEqual(len(full), 10)
+        self.assertEqual(len(full), 4)  # 1 summary + 3 most recent
+        self.assertTrue(full[0].startswith("Summary of 9 earlier"))
         self.assertEqual(full[-1], "goal 11")  # oldest first, newest last
 
     def test_off_saves_nothing(self):
@@ -206,6 +207,10 @@ class AgentRunnerTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         make_project(self.root)
 
+        p = mock.patch.object(agent_runner, "critic", return_value={"unsupported": 0, "usage": {}})
+        p.start()
+        self.addCleanup(p.stop)
+
     def tearDown(self):
         self.tmp.cleanup()
 
@@ -315,3 +320,91 @@ class AskServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PinSummaryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        memory_store.DB_PATH = Path(self.tmp.name) / "m.db"
+        memory_store._schema_ready_for = None
+
+    def tearDown(self):
+        memory_store.DB_PATH = None
+        self.tmp.cleanup()
+
+    def test_pinned_item_survives_pruning_and_is_recalled(self):
+        memory_store.remember("s", "full", "goal", "keep me")
+        first = memory_store.all_entries("s")[0]["id"]
+        self.assertTrue(memory_store.pin("s", first))
+        for i in range(memory_store.MAX_STORED_PER_SESSION + 5):
+            memory_store.remember("s", "full", "goal", f"g{i}")
+        texts = [e["text"] for e in memory_store.all_entries("s")]
+        self.assertIn("keep me", texts)
+        self.assertIn("keep me", memory_store.recall("s", "half"))
+        self.assertIn("keep me", memory_store.recall("s", "full"))
+
+    def test_pin_limit_and_unknown_id(self):
+        self.assertFalse(memory_store.pin("s", 999))
+
+    def test_old_database_gets_pinned_column(self):
+        import sqlite3
+        path = Path(self.tmp.name) / "old.db"
+        c = sqlite3.connect(path)
+        c.execute("CREATE TABLE memory (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, "
+                  "kind TEXT NOT NULL, text TEXT NOT NULL, created_at REAL NOT NULL)")
+        c.commit(); c.close()
+        memory_store.DB_PATH = path
+        memory_store._schema_ready_for = None
+        memory_store.remember("s", "full", "goal", "x")
+        self.assertEqual(memory_store.all_entries("s")[0]["pinned"], 0)
+
+
+class CrewTests(unittest.TestCase):
+    def test_replan_focuses_on_failing_file(self):
+        from app.services.crew import replan
+        deep = {"files": [{"path": "a.py", "functions": [{"name": "f", "line": 1}], "todos": [1]}]}
+        r = replan({"file": "a.py", "line": 3, "message": "boom"}, deep)
+        self.assertEqual(r["focus_evidence"]["functions_in_file"], ["f"])
+        self.assertIn("a.py", r["new_steps"][0])
+
+    def test_critic_degrades_without_key(self):
+        from app.services import crew
+        with mock.patch.object(crew.llm, "ask", return_value={"ok": False, "error": "no key", "usage": {}}):
+            r = crew.critic({"findings": [{"title": "No README"}]}, {"narrative": "n", "key_insight": "No README here"})
+        self.assertTrue(r["rule"]["insight_names_real_evidence"])
+        self.assertFalse(r["llm"]["available"])
+
+    def test_critic_counts_unsupported(self):
+        from app.services import crew
+        fake = {"ok": True, "usage": {"total_tokens": 5}, "data": {"verdicts": [
+            {"i": 0, "supported": False, "reason": "invented"}]}}
+        with mock.patch.object(crew.llm, "ask", return_value=fake):
+            r = crew.critic({"findings": []}, {"narrative": "uses Django", "key_insight": ""})
+        self.assertEqual(r["unsupported"], 1)
+
+    def test_failed_test_triggers_replan_event(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name); make_project(root)
+        with mock.patch.object(agent_runner, "detect_test_commands", return_value={"suggestions": [{"command": "x"}]}), \
+             mock.patch.object(agent_runner, "run_command", return_value={"passed": False}), \
+             mock.patch.object(agent_runner, "analyze_failure", return_value={"file": "src/auth.py", "line": 2}), \
+             mock.patch.object(agent_runner, "critic", return_value={"unsupported": 0, "usage": {}}), \
+             mock.patch.object(agent_runner, "interpret_project", return_value={"available": False, "error": "x"}):
+            events = list(agent_runner.run_agent(root, "g"))
+        self.assertTrue(any(e["step"] == "plan" and e["detail"].startswith("Replanned") for e in events))
+        self.assertEqual([e.get("role") for e in events if e["step"] == "scan"][0], "Surveyor")
+        self.assertIn("seconds", [e for e in events if e["step"] == "scan" and e["status"] == "done"][0]["data"]["metrics"])
+
+
+class GenerateTests(unittest.TestCase):
+    def test_untested_functions_and_diagram(self):
+        from app.services import deep_scanner, generate
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name); make_project(root)
+        (root / "tests").mkdir(); (root / "tests" / "test_x.py").write_text("def test_a():\n    total([1])\n")
+        deep = deep_scanner.deep_scan(root)
+        names = {t["name"] for t in generate.untested_functions(root, deep)}
+        self.assertIn("login", names)
+        self.assertNotIn("total", names)
+        self.assertTrue(generate.mermaid_diagram(deep).startswith("graph TD"))
+        self.assertIn("def login", generate._source(root, "src/auth.py", 1))

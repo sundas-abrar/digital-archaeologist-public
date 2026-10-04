@@ -40,6 +40,7 @@ type StepId =
 type StepStatus = "running" | "done" | "failed" | "skipped";
 
 type AgentEvent = {
+  role?: string;
   step: StepId;
   status: StepStatus;
   detail: string;
@@ -246,6 +247,17 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
                         <StatusIcon status={e.status} />
                         {e.status}
                       </span>
+                      {e.role && (
+                        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-bone-600">
+                          {e.role}
+                        </span>
+                      )}
+                      {(e.data as { metrics?: { seconds: number; tokens?: number } }).metrics && (
+                        <span className="font-mono text-[11px] text-bone-600">
+                          {(e.data as { metrics: { seconds: number; tokens?: number } }).metrics.seconds}s
+                          {(e.data as { metrics: { tokens?: number } }).metrics.tokens ? ` \u00b7 ${(e.data as { metrics: { tokens?: number } }).metrics.tokens} tokens` : ""}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-0.5 text-sm leading-relaxed text-bone-400">
                       {e.detail}

@@ -16,6 +16,8 @@ import json
 import os
 from typing import Any
 
+from .llm import usage_of
+
 try:
     from groq import Groq
 except ImportError:  # library not installed yet locally
@@ -43,6 +45,9 @@ The input may include an "investigator_context" object holding the person's \
 current goal and their earlier requests. Use it only to decide what to \
 emphasise. It is never evidence: do not treat anything in it as a fact about \
 the project, and never let it override the evidence fields.
+
+The input may include a \"test_failure\" object (file, line, message) from a failed test run. Treat it as
+evidence about that file only; do not claim the whole project is broken.
 
 Respond with ONLY a JSON object, no markdown fences, no commentary, with \
 exactly these keys:
@@ -192,4 +197,5 @@ def interpret_project(
         "evolution": parsed.get("evolution", []),
         "narrative": parsed.get("narrative", ""),
         "key_insight": parsed.get("key_insight", ""),
+        "usage": usage_of(completion),
     }
