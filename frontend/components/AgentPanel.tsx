@@ -23,8 +23,6 @@ import {
   MEMORY_OPTIONS,
   MemoryPanel,
   Segmented,
-  memoryForRequest,
-  pushHistory,
   useMemoryMode,
   useRunDepth,
 } from "@/components/AgentControls";
@@ -83,6 +81,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
   const [depth, setDepth] = useRunDepth();
   const [memory, setMemory] = useMemoryMode();
   const [started, setStarted] = useState(false);
+  const [memoryTick, setMemoryTick] = useState(0);
 
   useEffect(() => {
     return () => {
@@ -98,12 +97,8 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
     setRunning(true);
     setStarted(true);
 
-    // Memory: send only what the chosen mode allows, then remember this goal.
-    const remembered = memoryForRequest(sessionId, memory);
-    pushHistory(sessionId, goal.trim());
-
+    // Memory lives on the server: it reads and saves it based on `memory`.
     const qs = new URLSearchParams({ goal, depth, memory });
-    if (remembered.length) qs.set("history", JSON.stringify(remembered));
     const url = `${API_BASE}/api/agent/${sessionId}/run?${qs.toString()}`;
     const source = new EventSource(url);
     sourceRef.current = source;
@@ -127,6 +122,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
         if (parsed.step === "report" || parsed.step === "error") {
           setFinalData(parsed.data);
           setRunning(false);
+          setMemoryTick((t) => t + 1);
           source.close();
         }
       } catch {
@@ -209,7 +205,7 @@ export default function AgentPanel({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      <MemoryPanel sessionId={sessionId} mode={memory} />
+      <MemoryPanel sessionId={sessionId} mode={memory} refreshKey={memoryTick} />
 
       {(started || log.length > 0) && (
         <div className="border border-white/10 bg-soil-900/40 p-4 sm:p-5">

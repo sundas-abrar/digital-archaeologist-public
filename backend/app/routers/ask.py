@@ -12,7 +12,7 @@ from ..services.ask_service import (
     answer_question,
     get_context,
 )
-from ..services.memory import MAX_ITEM_CHARS, MAX_RAW_ITEMS, clean_history
+from ..services.memory_store import recall, remember
 
 router = APIRouter(prefix="/api/ask", tags=["ask"])
 
@@ -20,8 +20,6 @@ router = APIRouter(prefix="/api/ask", tags=["ask"])
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=1000)
     memory: Literal["off", "half", "full"] = "off"
-    # Generous bounds here; clean_history applies the real per-mode limit.
-    history: list[str] = Field(default_factory=list, max_length=MAX_RAW_ITEMS)
 
 
 @router.post("/{session_id}")
@@ -36,9 +34,7 @@ def ask(session_id: str, body: AskRequest):
     if not question:
         raise HTTPException(status_code=422, detail="Question can't be empty.")
 
-    history = clean_history(
-        [h[: MAX_ITEM_CHARS * 2] for h in body.history], body.memory
-    )
+    history = recall(session_id, body.memory)
 
     try:
         context, allowed = get_context(session_id, extract_dir)
@@ -48,4 +44,6 @@ def ask(session_id: str, body: AskRequest):
     except AskFailed as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
+    # Saved only after a successful answer, so failed attempts don't pollute memory.
+    remember(session_id, body.memory, "question", question)
     return {"session_id": session_id, **result}

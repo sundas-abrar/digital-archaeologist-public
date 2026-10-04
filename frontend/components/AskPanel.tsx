@@ -7,8 +7,6 @@ import {
   MEMORY_OPTIONS,
   MemoryPanel,
   Segmented,
-  memoryForRequest,
-  pushHistory,
   useMemoryMode,
 } from "@/components/AgentControls";
 
@@ -31,8 +29,6 @@ export default function AskPanel({ sessionId }: { sessionId: string }) {
     const question = q.trim();
     if (!question || busy) return;
 
-    const history = memoryForRequest(sessionId, memory);
-    pushHistory(sessionId, question);
     setMsgs((m) => [...m, { role: "user", text: question }]);
     setInput("");
     setError("");
@@ -42,7 +38,7 @@ export default function AskPanel({ sessionId }: { sessionId: string }) {
       const res = await fetch(`${API_BASE}/api/ask/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, memory, history }),
+        body: JSON.stringify({ question, memory }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -163,7 +159,7 @@ export default function AskPanel({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      <MemoryPanel key={msgs.length} sessionId={sessionId} mode={memory} />
+      <MemoryPanel sessionId={sessionId} mode={memory} refreshKey={msgs.length} />
     </div>
   );
 }

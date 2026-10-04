@@ -1,9 +1,9 @@
 """
 Agent memory: how much earlier context a request may carry.
 
-The browser keeps the person's recent goals/questions and sends them
-with each request. The SERVER decides how much of that is actually used,
-so a modified client can't push an unbounded prompt through the model.
+What is remembered lives on the server (services.memory_store). This
+module only defines how much of it a request may use, so a modified
+client can't push an unbounded prompt through the model.
 
     off  -> nothing
     half -> the 3 most recent items
@@ -12,7 +12,6 @@ so a modified client can't push an unbounded prompt through the model.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Literal
 
@@ -39,13 +38,3 @@ def clean_history(items: Any, mode: str) -> list[str]:
         if text:
             cleaned.append(text)
     return cleaned[-limit:]
-
-
-def parse_history(raw: str | None, mode: str) -> list[str]:
-    """For the GET/SSE agent route, where history arrives as a JSON string."""
-    if not raw or MEMORY_LIMITS.get(mode, 0) == 0:
-        return []
-    try:
-        return clean_history(json.loads(raw), mode)
-    except (json.JSONDecodeError, TypeError):
-        return []

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from ..config import STORAGE_DIR
 from ..services.agent_runner import run_agent
-from ..services.memory import parse_history
+from ..services.memory_store import recall, remember
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -19,21 +19,20 @@ def run(
     goal: str = Query("Determine how this project evolved.", max_length=500),
     depth: Literal["half", "full"] = "full",
     memory: Literal["off", "half", "full"] = "off",
-    history: str | None = Query(None, max_length=8000),
 ):
     """Streams the autonomous agent run as Server-Sent Events, one JSON
     event per pipeline step, so the frontend can show it happening live
     instead of one big spinner.
 
     depth:   "half" skips test execution and the AI narrative.
-    memory:  how much of `history` (a JSON array of earlier goals/questions)
-             the run may use. The limit is enforced here, not trusted from
-             the client."""
+    memory:  how much saved memory (earlier goals/questions for this
+             project) the run may use. "off" reads and saves nothing."""
     extract_dir = STORAGE_DIR / session_id / "extracted"
     if not extract_dir.exists():
         raise HTTPException(status_code=404, detail="Session not found. Upload the archive again.")
 
-    remembered = parse_history(history, memory)
+    remembered = recall(session_id, memory)  # read first: the new goal isn't its own history
+    remember(session_id, memory, "goal", goal)
 
     def event_stream():
         try:

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Brain, Check, Loader2, MinusCircle, X } from "lucide-react";
+import { Brain, Check, Loader2, MinusCircle, Trash2, X } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /* Types + options                                                     */
@@ -27,15 +28,14 @@ export const DEPTH_OPTIONS: { value: RunDepth; title: string; hint: string }[] =
 ];
 
 export const MEMORY_OPTIONS: { value: MemoryMode; title: string; hint: string }[] = [
-  { value: "off", title: "Off", hint: "Every run starts from a blank slate." },
-  { value: "half", title: "Half", hint: "Remembers your last 3 goals and questions." },
-  { value: "full", title: "Full", hint: "Remembers up to the last 10. Most context, most tokens." },
+  { value: "off", title: "Off", hint: "Every run starts from a blank slate. Nothing is saved." },
+  { value: "half", title: "Half", hint: "Uses the last 3 goals and questions saved for this project." },
+  { value: "full", title: "Full", hint: "Uses the last 10. Most context, most tokens." },
 ];
 
-const MEMORY_LIMIT: Record<MemoryMode, number> = { off: 0, half: 3, full: 10 };
 
 /* ------------------------------------------------------------------ */
-/* Memory: stored in this browser, per session, and sent to the API    */
+/* Settings kept in this browser (memory itself lives on the server)   */
 /* ------------------------------------------------------------------ */
 
 const MODE_KEY = "da:memory-mode";
@@ -84,32 +84,6 @@ export function useRunDepth(): [RunDepth, (d: RunDepth) => void] {
       writeLS(DEPTH_KEY, d);
     },
   ];
-}
-
-const historyKey = (sessionId: string) => `da:history:${sessionId}`;
-
-export function loadHistory(sessionId: string): string[] {
-  const raw = readLS(historyKey(sessionId));
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-export function pushHistory(sessionId: string, entry: string) {
-  // 300 chars matches the server's per-item cap and keeps the SSE URL short.
-  const next = [...loadHistory(sessionId), entry.trim().slice(0, 300)].slice(-20);
-  writeLS(historyKey(sessionId), JSON.stringify(next));
-}
-
-/** What the model would actually be sent for the chosen memory mode. */
-export function memoryForRequest(sessionId: string, mode: MemoryMode): string[] {
-  const limit = MEMORY_LIMIT[mode];
-  if (limit === 0) return [];
-  return loadHistory(sessionId).slice(-limit);
 }
 
 /* ------------------------------------------------------------------ */
@@ -237,14 +211,64 @@ export function CrewLanes({
 }
 
 /* ------------------------------------------------------------------ */
-/* Memory panel                                                        */
+/* Memory panel: reads what the SERVER saved for this project          */
 /* ------------------------------------------------------------------ */
 
-export function MemoryPanel({ sessionId, mode }: { sessionId: string; mode: MemoryMode }) {
-  const [items, setItems] = useState<string[]>([]);
+type MemoryItem = { id: number; kind: "goal" | "question"; text: string };
+
+export function MemoryPanel({
+  sessionId,
+  mode,
+  refreshKey = 0,
+}: {
+  sessionId: string;
+  mode: MemoryMode;
+  /** Change this to make the panel re-read the server (e.g. after a run). */
+  refreshKey?: number;
+}) {
+  const [sent, setSent] = useState<MemoryItem[]>([]);
+  const [stored, setStored] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
-    setItems(memoryForRequest(sessionId, mode));
-  }, [sessionId, mode]);
+    let cancelled = false;
+    fetch(`${API_BASE}/api/memory/${sessionId}?mode=${mode}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
+      .then((d) => {
+        if (cancelled) return;
+        setSent(d.sent ?? []);
+        setStored(d.stored ?? 0);
+        setError("");
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load memory from the server.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, mode, refreshKey]);
+
+  async function forget() {
+    if (!window.confirm("Forget everything the agent remembers about this project?")) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/memory/${sessionId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(String(res.status));
+      setSent([]);
+      setStored(0);
+      setError("");
+    } catch {
+      setError("Couldn't clear memory. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="border border-white/10 bg-soil-900/40 p-4 sm:p-5">
@@ -254,23 +278,56 @@ export function MemoryPanel({ sessionId, mode }: { sessionId: string; mode: Memo
           <h4 className="font-mono text-xs uppercase tracking-[0.1em]">Agent memory</h4>
         </div>
         <span className="border border-brass-500/40 px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-brass-400">
-          {mode} &middot; {items.length} sent
+          {mode} &middot; {sent.length} used &middot; {stored} saved
         </span>
       </div>
-      {items.length === 0 ? (
+
+      {error && (
+        <p className="mt-3 border border-rust-400/40 bg-soil-800 px-3 py-2 text-sm text-rust-400">
+          {error}
+        </p>
+      )}
+
+      {!error && !loaded ? (
+        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-bone-500">
+          Loading memory&hellip;
+        </p>
+      ) : sent.length === 0 ? (
         <p className="mt-3 text-sm text-bone-500">
           {mode === "off"
-            ? "Memory is off. The agent won't recall earlier goals or questions."
-            : "Nothing remembered yet. Run the agent or ask a question first."}
+            ? "Memory is off: nothing is read or saved."
+            : stored > 0
+              ? "Nothing to use yet in this mode."
+              : "Nothing saved yet. Run the agent or ask a question first."}
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
-          {items.map((m, i) => (
-            <li key={i} className="border-l-2 border-brass-500/40 pl-3 text-sm text-bone-300">
-              {m}
+          {sent.map((m) => (
+            <li key={m.id} className="border-l-2 border-brass-500/40 pl-3">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-bone-600">
+                {m.kind}
+              </p>
+              <p className="break-words text-sm text-bone-300">{m.text}</p>
             </li>
           ))}
         </ul>
+      )}
+
+      <p className="mt-3 text-xs text-bone-600">
+        Saved on the server for this project. Open the same dashboard link on another device to
+        see it there.
+      </p>
+
+      {stored > 0 && (
+        <button
+          type="button"
+          onClick={forget}
+          disabled={busy}
+          className="mt-3 inline-flex min-h-[44px] items-center gap-2 border border-white/15 px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-bone-500 transition-colors hover:border-rust-400 hover:text-rust-400 disabled:opacity-50"
+        >
+          <Trash2 size={13} />
+          Forget all
+        </button>
       )}
     </div>
   );

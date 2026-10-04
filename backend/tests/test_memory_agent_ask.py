@@ -15,8 +15,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app.services import agent_runner, ai_interpreter, ask_service
-from app.services.memory import clean_history, parse_history
+import threading
+
+from app.services import agent_runner, ai_interpreter, ask_service, memory_store
+from app.services.memory import clean_history
 
 
 def make_project(root: Path) -> None:
@@ -64,11 +66,126 @@ class MemoryTests(unittest.TestCase):
     def test_not_a_list(self):
         self.assertEqual(clean_history("nope", "full"), [])
 
-    def test_parse_history(self):
-        self.assertEqual(parse_history(json.dumps(["a", "b"]), "half"), ["a", "b"])
-        self.assertEqual(parse_history("{not json", "full"), [])
-        self.assertEqual(parse_history(json.dumps(["a"]), "off"), [])
-        self.assertEqual(parse_history(None, "full"), [])
+
+class MemoryStoreTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        memory_store.DB_PATH = Path(self.tmp.name) / "memory.db"
+
+    def tearDown(self):
+        memory_store.DB_PATH = None
+        self.tmp.cleanup()
+
+    def test_add_and_recall_by_mode(self):
+        for i in range(12):
+            memory_store.remember("s1", "full", "goal", f"goal {i}")
+        self.assertEqual(memory_store.recall("s1", "off"), [])
+        self.assertEqual(memory_store.recall("s1", "half"), ["goal 9", "goal 10", "goal 11"])
+        full = memory_store.recall("s1", "full")
+        self.assertEqual(len(full), 10)
+        self.assertEqual(full[-1], "goal 11")  # oldest first, newest last
+
+    def test_off_saves_nothing(self):
+        memory_store.remember("s1", "off", "goal", "secret")
+        self.assertEqual(memory_store.count("s1"), 0)
+
+    def test_survives_a_new_connection_like_a_restart(self):
+        memory_store.remember("s1", "half", "question", "who wrote auth?")
+        # Nothing is held in process memory; a fresh read sees it.
+        self.assertEqual(memory_store.recent("s1", 5)[0]["text"], "who wrote auth?")
+        self.assertEqual(memory_store.recent("s1", 5)[0]["kind"], "question")
+
+    def test_sessions_are_separate(self):
+        memory_store.remember("a", "half", "goal", "for a")
+        memory_store.remember("b", "half", "goal", "for b")
+        self.assertEqual(memory_store.recall("a", "half"), ["for a"])
+        self.assertEqual(memory_store.recall("b", "half"), ["for b"])
+
+    def test_exact_repeat_is_skipped_but_other_kind_is_not(self):
+        self.assertTrue(memory_store.add("s1", "goal", "same"))
+        self.assertFalse(memory_store.add("s1", "goal", "same"))
+        self.assertTrue(memory_store.add("s1", "question", "same"))
+        self.assertTrue(memory_store.add("s1", "goal", "other"))
+        self.assertTrue(memory_store.add("s1", "goal", "same"))  # not the latest any more
+        self.assertEqual(memory_store.count("s1"), 4)
+
+    def test_text_is_cleaned_and_capped(self):
+        memory_store.add("s1", "goal", "  lots   of \n space  ")
+        memory_store.add("s1", "goal", "x" * 1000)
+        memory_store.add("s1", "goal", "   ")
+        texts = [e["text"] for e in memory_store.recent("s1", 10)]
+        self.assertEqual(texts[0], "lots of space")
+        self.assertEqual(len(texts[1]), 300)
+        self.assertEqual(len(texts), 2)
+
+    def test_unknown_kind_is_a_bug_not_silently_ignored(self):
+        with self.assertRaises(ValueError):
+            memory_store.add("s1", "note", "x")
+
+    def test_old_entries_are_pruned(self):
+        for i in range(memory_store.MAX_STORED_PER_SESSION + 8):
+            memory_store.add("s1", "goal", f"g{i}")
+        self.assertEqual(memory_store.count("s1"), memory_store.MAX_STORED_PER_SESSION)
+        self.assertEqual(memory_store.recent("s1", 1)[0]["text"], f"g{memory_store.MAX_STORED_PER_SESSION + 7}")
+        self.assertEqual(memory_store.recent("s1", 999)[0]["text"], "g8")
+
+    def test_clear_only_affects_one_session(self):
+        memory_store.add("a", "goal", "x")
+        memory_store.add("a", "question", "y")
+        memory_store.add("b", "goal", "z")
+        self.assertEqual(memory_store.clear("a"), 2)
+        self.assertEqual(memory_store.count("a"), 0)
+        self.assertEqual(memory_store.count("b"), 1)
+
+    def test_a_broken_store_never_breaks_a_request(self):
+        # A directory where the database file should be: sqlite can't open it.
+        memory_store.DB_PATH = Path(self.tmp.name)
+        with self.assertLogs(memory_store.log, level="ERROR") as logs:
+            self.assertEqual(memory_store.recall("s1", "full"), [])
+            memory_store.remember("s1", "full", "goal", "x")  # must not raise
+        self.assertEqual(len(logs.records), 2)  # both failures were logged, not hidden
+
+    def test_concurrent_writers_and_a_reader(self):
+        errors: list[Exception] = []
+        stop = threading.Event()
+
+        def write(n: int):
+            try:
+                for i in range(10):
+                    memory_store.add("s1", "goal", f"t{n}-{i}")
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+
+        def read():
+            while not stop.is_set():
+                try:
+                    memory_store.recent("s1", 10)
+                    memory_store.count("s1")
+                except Exception as e:  # noqa: BLE001
+                    errors.append(e)
+
+        writers = [threading.Thread(target=write, args=(n,), daemon=True) for n in range(8)]
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        for t in writers:
+            t.start()
+        # Bounded waits: if something ever deadlocks, the test FAILS instead
+        # of hanging the whole run.
+        for t in writers:
+            t.join(timeout=60)
+        stop.set()
+        reader.join(timeout=10)
+
+        self.assertFalse(any(t.is_alive() for t in writers), "writers did not finish (deadlock?)")
+        self.assertEqual(errors, [])
+        self.assertEqual(memory_store.count("s1"), memory_store.MAX_STORED_PER_SESSION)
+
+    def test_database_is_recreated_if_the_file_is_deleted(self):
+        memory_store.add("s1", "goal", "before")
+        memory_store.DB_PATH.unlink()  # someone cleared storage while the server runs
+        self.assertEqual(memory_store.count("s1"), 0)
+        self.assertTrue(memory_store.add("s1", "goal", "after"))
+        self.assertEqual(memory_store.recall("s1", "half"), ["after"])
 
 
 class InterpreterPayloadTests(unittest.TestCase):
